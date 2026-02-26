@@ -10,7 +10,7 @@ export const portfolio = {
   githubUsername: "seraphin",
   linkedin: "https://linkedin.com/in/seraphin",
   cvUrl: "/NARIVELOSON-Seraphin-cv.pdf",
-  photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80",
+  photo: "./moi.png",
 
   currently: {
     learning: "Rust & WebAssembly",
