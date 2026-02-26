@@ -1,11 +1,29 @@
 "use client";
 
 import { portfolio } from "@/data/portfolio";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, MutableRefObject } from "react";
+import type { CSSProperties } from "react";
+
+/* ─── TYPES ─── */
+interface Challenge { problem: string; solution: string; }
+interface Project {
+  id: number; slug: string; title: string; description: string;
+  longDescription: string; image: string; metrics: string[];
+  tags: string[]; github: string; live: string | null; featured: boolean;
+  challenges: Challenge[]; screenshots: string[];
+}
+interface Testimonial { id: number; name: string; role: string; avatar: string; text: string; }
+interface Badge { label: string; icon: string; color: string; }
+interface GHStats { repos: number; followers: number; following: number; }
+
+// Extend CSSProperties to allow CSS custom properties
+interface CustomCSS extends CSSProperties {
+  [key: `--${string}`]: string | number;
+}
 
 /* ─── THEME ─── */
-function useTheme() {
-  const [dark, setDark] = useState(true);
+function useTheme(): [boolean, (v: boolean) => void] {
+  const [dark, setDark] = useState<boolean>(true);
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   }, [dark]);
@@ -14,24 +32,27 @@ function useTheme() {
 
 /* ─── CURSOR ─── */
 function Cursor() {
-  const dot = useRef(null);
-  const ring = useRef(null);
+  const dot = useRef<HTMLDivElement>(null);
+  const ring = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let mx = 0, my = 0, rx = 0, ry = 0;
-    const move = (e) => { mx = e.clientX; my = e.clientY; };
+    let raf: number;
+    const move = (e: MouseEvent) => { mx = e.clientX; my = e.clientY; };
     window.addEventListener("mousemove", move);
-    let raf;
     const loop = () => {
       rx += (mx - rx) * 0.12;
       ry += (my - ry) * 0.12;
-      if (dot.current) { dot.current.style.transform = `translate(${mx - 4}px,${my - 4}px)`; }
-      if (ring.current) { ring.current.style.transform = `translate(${rx - 20}px,${ry - 20}px)`; }
+      if (dot.current) dot.current.style.transform = `translate(${mx - 4}px,${my - 4}px)`;
+      if (ring.current) ring.current.style.transform = `translate(${rx - 20}px,${ry - 20}px)`;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     const over = () => ring.current?.classList.add("cursor-hover");
     const out = () => ring.current?.classList.remove("cursor-hover");
-    document.querySelectorAll("a,button").forEach(el => { el.addEventListener("mouseenter", over); el.addEventListener("mouseleave", out); });
+    document.querySelectorAll("a,button").forEach(el => {
+      el.addEventListener("mouseenter", over);
+      el.addEventListener("mouseleave", out);
+    });
     return () => { window.removeEventListener("mousemove", move); cancelAnimationFrame(raf); };
   }, []);
   return (
@@ -43,40 +64,47 @@ function Cursor() {
 }
 
 /* ─── REVEAL HOOK ─── */
-function useReveal() {
-  const ref = useRef(null);
-  const [v, setV] = useState(false);
+function useReveal(): [MutableRefObject<HTMLDivElement | null>, boolean] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [v, setV] = useState<boolean>(false);
   useEffect(() => {
-    const el = ref.current; if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setV(true); obs.disconnect(); } }, { threshold: 0.08 });
-    obs.observe(el); return () => obs.disconnect();
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setV(true); obs.disconnect(); } },
+      { threshold: 0.08 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
   }, []);
   return [ref, v];
 }
 
 /* ─── GITHUB STATS ─── */
 function GitHubStats() {
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState<GHStats | null>(null);
   const [ref, v] = useReveal();
   useEffect(() => {
     fetch(`https://api.github.com/users/${portfolio.githubUsername}`)
       .then(r => r.json())
-      .then(d => setStats({ repos: d.public_repos, followers: d.followers, following: d.following, name: d.name }))
+      .then(d => setStats({ repos: d.public_repos, followers: d.followers, following: d.following }))
       .catch(() => setStats({ repos: 42, followers: 318, following: 95 }));
   }, []);
   return (
     <div ref={ref} className={`gh-stats ${v ? "revealed" : ""}`}>
       <div className="gh-header">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.09.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836a9.59 9.59 0 012.504.338c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.577.688.479C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.09.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836a9.59 9.59 0 012.504.338c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.577.688.479C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+        </svg>
         <span>Live GitHub Stats</span>
         <span className="gh-live">● live</span>
       </div>
       <div className="gh-numbers">
-        {[
+        {([
           { label: "Public Repos", value: stats?.repos ?? "—" },
-          { label: "Followers", value: stats?.followers ?? "—" },
-          { label: "Following", value: stats?.following ?? "—" },
-        ].map(s => (
+          { label: "Followers",    value: stats?.followers ?? "—" },
+          { label: "Following",    value: stats?.following ?? "—" },
+        ] as { label: string; value: number | string }[]).map(s => (
           <div key={s.label} className="gh-stat">
             <span className="gh-num">{s.value}</span>
             <span className="gh-label">{s.label}</span>
@@ -91,9 +119,13 @@ function GitHubStats() {
 }
 
 /* ─── NAV ─── */
-function Nav({ dark, setDark }) {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => { const h = () => setScrolled(window.scrollY > 40); window.addEventListener("scroll", h); return () => window.removeEventListener("scroll", h); }, []);
+function Nav({ dark, setDark }: { dark: boolean; setDark: (v: boolean) => void }) {
+  const [scrolled, setScrolled] = useState<boolean>(false);
+  useEffect(() => {
+    const h = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", h);
+    return () => window.removeEventListener("scroll", h);
+  }, []);
   return (
     <nav className={`nav ${scrolled ? "nav--scrolled" : ""}`}>
       <span className="nav-logo">{portfolio.name.split(" ")[0]}<span className="accent">.</span></span>
@@ -130,17 +162,26 @@ function Hero() {
         <div className="hero-actions">
           <a href="#projects" className="btn-primary">
             Voir mon travail
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </a>
           <a href={portfolio.cvUrl} download className="btn-secondary">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
             Telecharger CV
           </a>
           <a href={portfolio.github} target="_blank" rel="noopener noreferrer" className="btn-ghost">GitHub</a>
         </div>
       </div>
       <div className="hero-meta">
-        {[{ label: "Emplacement", val: portfolio.location }, { label: "Experience", val: "5 ans" }, { label: "Se concentrer", val: "Fullstack JS" }, { label: "Status", val: "Ouvert au travail" }].map(m => (
+        {([
+          { label: "Emplacement",   val: portfolio.location },
+          { label: "Experience",    val: "5 ans" },
+          { label: "Se concentrer", val: "Fullstack JS" },
+          { label: "Status",        val: "Ouvert au travail" },
+        ] as { label: string; val: string }[]).map(m => (
           <div key={m.label} className="hero-meta-item">
             <span className="meta-label">{m.label}</span>
             <span>{m.val}</span>
@@ -155,8 +196,8 @@ function Hero() {
 function About() {
   const [ref, v] = useReveal();
   return (
-    <section id="about" className="section about-section" ref={ref}>
-      <div className={`about-layout ${v ? "revealed" : ""}`}>
+    <section id="about" className="section about-section">
+      <div ref={ref} className={`about-layout ${v ? "revealed" : ""}`}>
         <div className="about-photo-wrap">
           <img src={portfolio.photo} alt={portfolio.name} className="about-photo" />
           <div className="about-photo-border" />
@@ -175,8 +216,8 @@ function About() {
           <p className="about-bio">{portfolio.bio}</p>
           <p className="about-vision">{portfolio.vision}</p>
           <div className="about-badges">
-            {portfolio.badges.map(b => (
-              <div key={b.label} className="cert-badge" style={{ "--badge-color": b.color }}>
+            {(portfolio.badges as Badge[]).map(b => (
+              <div key={b.label} className="cert-badge" style={{ "--badge-color": b.color } as CustomCSS}>
                 <span>{b.icon}</span>
                 <span>{b.label}</span>
               </div>
@@ -190,12 +231,12 @@ function About() {
 }
 
 /* ─── PROJECT CARD ─── */
-function ProjectCard({ project, index }) {
-  const [hovered, setHovered] = useState(false);
+function ProjectCard({ project, index }: { project: Project; index: number }) {
+  const [hovered, setHovered] = useState<boolean>(false);
   return (
     <article
       className="project-card"
-      style={{ "--delay": `${index * 0.1}s` }}
+      style={{ "--delay": `${index * 0.1}s` } as CustomCSS}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -204,21 +245,23 @@ function ProjectCard({ project, index }) {
         <div className="project-image-overlay" />
         {project.featured && <span className="project-badge">Featured</span>}
         <div className={`project-metrics-overlay ${hovered ? "visible" : ""}`}>
-          {project.metrics.map(m => <span key={m} className="metric-chip">{m}</span>)}
+          {project.metrics.map((m: string) => <span key={m} className="metric-chip">{m}</span>)}
         </div>
       </div>
       <div className="project-body">
         <div className="project-tags">
-          {project.tags.slice(0, 4).map(t => <span key={t} className="tag">{t}</span>)}
+          {project.tags.slice(0, 4).map((t: string) => <span key={t} className="tag">{t}</span>)}
         </div>
         <h3 className="project-title">{project.title}</h3>
         <p className="project-desc">{project.description}</p>
         <div className="project-links">
           <a href={project.github} target="_blank" rel="noopener noreferrer" className="project-link">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.09.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836a9.59 9.59 0 012.504.338c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.577.688.479C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.09.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836a9.59 9.59 0 012.504.338c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.577.688.479C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+            </svg>
             GitHub
           </a>
-          <a href={`/projects/${project.slug}`} className="project-link project-link--detail">Case study →</a>
+          <span className="project-link project-link--detail" style={{ cursor: "pointer" }}>Case study →</span>
           {project.live && <a href={project.live} target="_blank" rel="noopener noreferrer" className="project-link project-link--live">Live ↗</a>}
         </div>
       </div>
@@ -227,41 +270,39 @@ function ProjectCard({ project, index }) {
 }
 
 /* ─── PROJECT DETAIL MODAL ─── */
-function ProjectModal({ project, onClose }) {
+function ProjectModal({ project, onClose }: { project: Project; onClose: () => void }) {
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    const k = (e) => { if (e.key === "Escape") onClose(); };
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", k);
     return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", k); };
   }, [onClose]);
-  if (!project) return null;
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>✕</button>
         <div className="modal-header">
           <img src={project.screenshots[0]} alt={project.title} className="modal-hero-img" />
           <div className="modal-header-overlay" />
           <div className="modal-header-content">
-            <div className="project-tags">{project.tags.map(t => <span key={t} className="tag">{t}</span>)}</div>
+            <div className="project-tags">
+              {project.tags.map((t: string) => <span key={t} className="tag">{t}</span>)}
+            </div>
             <h2 className="modal-title">{project.title}</h2>
-            <div className="modal-metrics">{project.metrics.map(m => <span key={m} className="metric-chip">{m}</span>)}</div>
+            <div className="modal-metrics">
+              {project.metrics.map((m: string) => <span key={m} className="metric-chip">{m}</span>)}
+            </div>
           </div>
         </div>
         <div className="modal-body">
           <p className="modal-desc">{project.longDescription}</p>
-          <h3 className="modal-section-title">Challenges & Solutions</h3>
+          <h3 className="modal-section-title">Challenges &amp; Solutions</h3>
           <div className="modal-challenges">
-            {project.challenges.map((c, i) => (
+            {project.challenges.map((c: Challenge, i: number) => (
               <div key={i} className="challenge-item">
-                <div className="challenge-problem">
-                  <span className="challenge-icon">⚠️</span>
-                  <strong>{c.problem}</strong>
-                </div>
-                <div className="challenge-solution">
-                  <span className="challenge-icon">✅</span>
-                  <span>{c.solution}</span>
-                </div>
+                <div className="challenge-problem"><span className="challenge-icon">⚠️</span><strong>{c.problem}</strong></div>
+                <div className="challenge-solution"><span className="challenge-icon">✅</span><span>{c.solution}</span></div>
               </div>
             ))}
           </div>
@@ -269,7 +310,9 @@ function ProjectModal({ project, onClose }) {
             <>
               <h3 className="modal-section-title">Screenshots</h3>
               <div className="modal-screenshots">
-                {project.screenshots.map((s, i) => <img key={i} src={s} alt={`Screenshot ${i + 1}`} className="modal-screenshot" />)}
+                {project.screenshots.map((s: string, i: number) => (
+                  <img key={i} src={s} alt={`Screenshot ${i + 1}`} className="modal-screenshot" />
+                ))}
               </div>
             </>
           )}
@@ -286,21 +329,21 @@ function ProjectModal({ project, onClose }) {
 /* ─── PROJECTS ─── */
 function Projects() {
   const [ref, v] = useReveal();
-  const [activeProject, setActiveProject] = useState(null);
+  const [activeProject, setActiveProject] = useState<Project | null>(null);
   return (
-    <section id="projects" className="section" ref={ref}>
-      <div className={`section-header ${v ? "revealed" : ""}`}>
-        <p className="section-label">Ttravail selectionne</p>
+    <section id="projects" className="section">
+      <div ref={ref} className={`section-header ${v ? "revealed" : ""}`}>
+        <p className="section-label">Travail selectionne</p>
         <h2 className="section-title">Des projets qui <em>comptent</em></h2>
       </div>
       <div className={`projects-grid ${v ? "revealed" : ""}`}>
-        {portfolio.projects.map((p, i) => (
+        {(portfolio.projects as Project[]).map((p: Project, i: number) => (
           <div key={p.id} onClick={() => setActiveProject(p)} style={{ cursor: "pointer" }}>
             <ProjectCard project={p} index={i} />
           </div>
         ))}
       </div>
-      <p className="projects-hint">Click any card to view the full case study</p>
+      <p className="projects-hint">Cliquez sur une carte pour voir l&apos;étude de cas complète</p>
       {activeProject && <ProjectModal project={activeProject} onClose={() => setActiveProject(null)} />}
     </section>
   );
@@ -310,18 +353,18 @@ function Projects() {
 function Skills() {
   const [ref, v] = useReveal();
   return (
-    <section id="skills" className="section" ref={ref}>
-      <div className={`section-header ${v ? "revealed" : ""}`}>
+    <section id="skills" className="section">
+      <div ref={ref} className={`section-header ${v ? "revealed" : ""}`}>
         <p className="section-label">Competence</p>
         <h2 className="section-title">The <em>stack</em></h2>
       </div>
       <div className={`skills-grid ${v ? "revealed" : ""}`}>
-        {portfolio.skills.map((group, gi) => (
-          <div key={group.category} className="skill-group" style={{ "--delay": `${gi * 0.08}s` }}>
+        {(portfolio.skills as { category: string; items: string[] }[]).map((group, gi: number) => (
+          <div key={group.category} className="skill-group" style={{ "--delay": `${gi * 0.08}s` } as CustomCSS}>
             <h3 className="skill-category">{group.category}</h3>
             <div className="skill-badges">
-              {group.items.map((item, ii) => (
-                <span key={item} className="skill-badge" style={{ "--badge-delay": `${gi * 0.08 + ii * 0.04}s` }}>{item}</span>
+              {group.items.map((item: string, ii: number) => (
+                <span key={item} className="skill-badge" style={{ "--badge-delay": `${gi * 0.08 + ii * 0.04}s` } as CustomCSS}>{item}</span>
               ))}
             </div>
           </div>
@@ -335,15 +378,15 @@ function Skills() {
 function Testimonials() {
   const [ref, v] = useReveal();
   return (
-    <section id="testimonials" className="section testimonials-section" ref={ref}>
-      <div className={`section-header ${v ? "revealed" : ""}`}>
+    <section id="testimonials" className="section testimonials-section">
+      <div ref={ref} className={`section-header ${v ? "revealed" : ""}`}>
         <p className="section-label">Preuve sociale</p>
         <h2 className="section-title">Ce que disent les <em>gens</em></h2>
       </div>
       <div className={`testimonials-grid ${v ? "revealed" : ""}`}>
-        {portfolio.testimonials.map((t, i) => (
-          <div key={t.id} className="testimonial-card" style={{ "--delay": `${i * 0.12}s` }}>
-            <div className="testimonial-quote">"</div>
+        {(portfolio.testimonials as Testimonial[]).map((t: Testimonial, i: number) => (
+          <div key={t.id} className="testimonial-card" style={{ "--delay": `${i * 0.12}s` } as CustomCSS}>
+            <div className="testimonial-quote">&ldquo;</div>
             <p className="testimonial-text">{t.text}</p>
             <div className="testimonial-author">
               <img src={t.avatar} alt={t.name} className="testimonial-avatar" />
@@ -362,13 +405,18 @@ function Testimonials() {
 /* ─── CONTACT ─── */
 function Contact() {
   const [ref, v] = useReveal();
-  const [form, setForm] = useState({ name: "", email: "", message: "" });
-  const [status, setStatus] = useState(null);
-  const handle = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const submit = (e) => { e.preventDefault(); setStatus("sending"); setTimeout(() => setStatus("sent"), 1500); };
+  const [form, setForm] = useState<{ name: string; email: string; message: string }>({ name: "", email: "", message: "" });
+  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm({ ...form, [e.target.name]: e.target.value });
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus("sending");
+    setTimeout(() => setStatus("sent"), 1500);
+  };
   return (
-    <section id="contact" className="section contact-section" ref={ref}>
-      <div className={`section-header ${v ? "revealed" : ""}`}>
+    <section id="contact" className="section contact-section">
+      <div ref={ref} className={`section-header ${v ? "revealed" : ""}`}>
         <p className="section-label">Entrer en contact</p>
         <h2 className="section-title">Construisons <em>quelque chose</em></h2>
       </div>
@@ -383,25 +431,36 @@ function Contact() {
             </div>
           </div>
           <a href={portfolio.cvUrl} download className="btn-secondary cv-btn">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-            Download my CV
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Telecharger mon CV
           </a>
         </div>
         <form className="contact-form" onSubmit={submit}>
           {status === "sent" ? (
             <div className="form-success">
               <span className="success-icon">✓</span>
-              <p>Message received. I'll be in touch soon.</p>
+              <p>Message reçu. Je vous répondrai bientôt.</p>
             </div>
           ) : (
             <>
               <div className="form-row">
-                <div className="field"><label htmlFor="name">Nom</label><input id="name" name="name" type="text" placeholder="Entrez votre nom" value={form.name} onChange={handle} required /></div>
-                <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" placeholder="Entrez votre email" value={form.email} onChange={handle} required /></div>
+                <div className="field">
+                  <label htmlFor="name">Nom</label>
+                  <input id="name" name="name" type="text" placeholder="Votre nom" value={form.name} onChange={handle} required />
+                </div>
+                <div className="field">
+                  <label htmlFor="email">Email</label>
+                  <input id="email" name="email" type="email" placeholder="votre@email.com" value={form.email} onChange={handle} required />
+                </div>
               </div>
-              <div className="field"><label htmlFor="message">Message</label><textarea id="message" name="message" placeholder="Entrez votre message, dis moi concernant votre projet ..." value={form.message} onChange={handle} rows={5} required /></div>
+              <div className="field">
+                <label htmlFor="message">Message</label>
+                <textarea id="message" name="message" placeholder="Parlez-moi de votre projet..." value={form.message} onChange={handle} rows={5} required />
+              </div>
               <button type="submit" className="btn-primary btn-submit" disabled={status === "sending"}>
-                {status === "sending" ? "Sending..." : "Envoyez message →"}
+                {status === "sending" ? "Envoi..." : "Envoyer le message →"}
               </button>
             </>
           )}
@@ -416,7 +475,7 @@ function Footer() {
   return (
     <footer className="footer">
       <span>{portfolio.name} — {new Date().getFullYear()}</span>
-      <span>Construit avec Next.js & Tailwind CSS</span>
+      <span>Construit avec Next.js &amp; Tailwind CSS</span>
     </footer>
   );
 }
@@ -428,31 +487,26 @@ export default function Page() {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=DM+Mono:wght@300;400&display=swap');
-
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-
-        :root {
-          --bg:#0a0a0b; --bg-2:#111113; --bg-3:#1a1a1e;
+        :root{
+          --bg:#0a0a0b;--bg-2:#111113;--bg-3:#1a1a1e;
           --border:rgba(255,255,255,0.07);
-          --text:#e8e8ec; --text-muted:#6b6b78;
-          --accent:#c8ff3e; --accent-dim:rgba(200,255,62,0.1);
+          --text:#e8e8ec;--text-muted:#6b6b78;
+          --accent:#c8ff3e;--accent-dim:rgba(200,255,62,0.1);
           --radius:12px;
           --font-display:'Playfair Display',Georgia,serif;
           --font-body:'DM Sans',system-ui,sans-serif;
           --font-mono:'DM Mono',monospace;
           --shadow:0 24px 64px rgba(0,0,0,0.5);
         }
-        [data-theme="light"] {
-          --bg:#f5f5f0; --bg-2:#ebebE6; --bg-3:#e0e0da;
+        [data-theme="light"]{
+          --bg:#f5f5f0;--bg-2:#ebebE6;--bg-3:#e0e0da;
           --border:rgba(0,0,0,0.08);
-          --text:#1a1a1e; --text-muted:#6b6b78;
+          --text:#1a1a1e;--text-muted:#6b6b78;
           --shadow:0 24px 64px rgba(0,0,0,0.12);
-
-           /* ← AJOUTE CES 2 LIGNES : */
           --accent:#2563eb;
           --accent-dim:rgba(37,99,235,0.10);
         }
-
         html{scroll-behavior:smooth;}
         body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;transition:background 0.3s,color 0.3s;}
         a{color:inherit;text-decoration:none;}
@@ -464,11 +518,10 @@ export default function Page() {
         /* CURSOR */
         @media(pointer:fine){
           *{cursor:none!important;}
-          .cursor-dot{position:fixed;top:0;left:0;width:8px;height:8px;background:var(--accent);border-radius:50%;pointer-events:none;z-index:9999;transition:opacity .2s;}
-          .cursor-ring{position:fixed;top:0;left:0;width:40px;height:40px;border:1.5px solid var(--accent);border-radius:50%;pointer-events:none;z-index:9998;opacity:.5;transition:opacity .2s,width .2s,height .2s,border-color .2s;}
-          .cursor-ring.cursor-hover{width:56px;height:56px;opacity:.8;border-color:var(--text);}
+          .cursor-dot{position:fixed;top:0;left:0;width:8px;height:8px;background:var(--accent);border-radius:50%;pointer-events:none;z-index:9999;}
+          .cursor-ring{position:fixed;top:0;left:0;width:40px;height:40px;border:1.5px solid var(--accent);border-radius:50%;pointer-events:none;z-index:9998;opacity:.5;transition:width .2s,height .2s;}
+          .cursor-ring.cursor-hover{width:56px;height:56px;opacity:.8;}
         }
-
         .accent{color:var(--accent);}
 
         /* NAV */
@@ -480,14 +533,14 @@ export default function Page() {
         .nav-links a{font-size:.875rem;color:var(--text-muted);transition:color .2s;}
         .nav-links a:hover{color:var(--text);}
         .nav-cta{color:var(--accent)!important;font-weight:500;border:1px solid rgba(200,255,62,.3);padding:.35rem .9rem;border-radius:999px;transition:background .2s!important;}
+        [data-theme="light"] .nav-cta{border-color:rgba(37,99,235,.3)!important;}
         .nav-cta:hover{background:var(--accent-dim)!important;}
         .theme-toggle{background:var(--bg-3);border:1px solid var(--border);border-radius:999px;padding:.3rem .65rem;font-size:.9rem;cursor:pointer;color:var(--text);transition:background .2s;}
         .theme-toggle:hover{background:var(--bg-2);}
 
         /* HERO */
         .hero{position:relative;min-height:100svh;display:grid;grid-template-rows:1fr auto;padding:10rem 4vw 4rem;overflow:hidden;}
-        .hero-noise{position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;}
-        .hero-content{max-width:900px;}
+        .hero-noise{position:absolute;inset:0;opacity:.03;pointer-events:none;}
         .hero-eyebrow{display:inline-flex;align-items:center;gap:.5rem;font-size:.8125rem;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:2.5rem;animation:fadeUp .8s ease both;}
         .status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 2s ease infinite;}
         @keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.6;transform:scale(.85);}}
@@ -505,6 +558,7 @@ export default function Page() {
         /* BUTTONS */
         .btn-primary{display:inline-flex;align-items:center;gap:.5rem;background:var(--accent);color:#000;font-weight:500;font-size:.9rem;padding:.7rem 1.6rem;border-radius:999px;transition:transform .2s,box-shadow .2s;border:none;cursor:pointer;}
         .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(200,255,62,.25);}
+        [data-theme="light"] .btn-primary:hover{box-shadow:0 8px 24px rgba(37,99,235,.25);}
         .btn-secondary{display:inline-flex;align-items:center;gap:.5rem;background:var(--bg-3);border:1px solid var(--border);color:var(--text);font-size:.9rem;padding:.7rem 1.6rem;border-radius:999px;transition:transform .2s,border-color .2s;cursor:pointer;}
         .btn-secondary:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.2);}
         .btn-ghost{display:inline-flex;align-items:center;padding:.7rem 1.6rem;border-radius:999px;border:1px solid var(--border);color:var(--text-muted);font-size:.9rem;transition:color .2s,border-color .2s;}
@@ -551,8 +605,9 @@ export default function Page() {
         .projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:1.5rem;opacity:0;transform:translateY(32px);transition:opacity .7s .15s ease,transform .7s .15s ease;}
         .projects-grid.revealed{opacity:1;transform:none;}
         .projects-hint{text-align:center;font-size:.8rem;font-family:var(--font-mono);color:var(--text-muted);margin-top:1.5rem;opacity:.6;}
-        .project-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:transform .3s ease,border-color .3s ease,box-shadow .3s ease;}
+        .project-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:transform .3s,border-color .3s,box-shadow .3s;}
         .project-card:hover{transform:translateY(-4px);border-color:rgba(200,255,62,.2);box-shadow:var(--shadow);}
+        [data-theme="light"] .project-card:hover{border-color:rgba(37,99,235,.2);}
         .project-image-wrap{position:relative;aspect-ratio:16/9;overflow:hidden;}
         .project-image{object-fit:cover;height:100%;transition:transform .5s ease;}
         .project-image.zoomed{transform:scale(1.06);}
@@ -561,6 +616,7 @@ export default function Page() {
         .project-metrics-overlay{position:absolute;bottom:.75rem;left:.75rem;right:.75rem;display:flex;flex-wrap:wrap;gap:.375rem;opacity:0;transform:translateY(6px);transition:opacity .3s,transform .3s;}
         .project-metrics-overlay.visible{opacity:1;transform:none;}
         .metric-chip{font-size:.675rem;font-family:var(--font-mono);background:rgba(200,255,62,.15);border:1px solid rgba(200,255,62,.3);color:var(--accent);padding:.2rem .55rem;border-radius:4px;}
+        [data-theme="light"] .metric-chip{background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.3);}
         .project-body{padding:1.25rem;}
         .project-tags{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem;}
         .tag{font-size:.6875rem;font-family:var(--font-mono);color:var(--text-muted);border:1px solid var(--border);padding:.2rem .55rem;border-radius:4px;}
@@ -570,7 +626,7 @@ export default function Page() {
         .project-link{font-size:.8rem;font-family:var(--font-mono);color:var(--text-muted);display:inline-flex;align-items:center;gap:.3rem;transition:color .2s;}
         .project-link:hover{color:var(--text);}
         .project-link--live{color:var(--accent)!important;}
-        .project-link--detail{color:var(--text-muted);border-bottom:1px solid var(--border);}
+        .project-link--detail{border-bottom:1px solid var(--border);}
         .project-link--detail:hover{color:var(--text);border-color:var(--text);}
 
         /* MODAL */
@@ -604,12 +660,13 @@ export default function Page() {
         .skill-badge{font-size:.8rem;padding:.3rem .7rem;background:var(--bg-3);border:1px solid var(--border);border-radius:6px;color:var(--text);transition:background .2s,border-color .2s,color .2s,transform .2s;opacity:0;}
         .skills-grid.revealed .skill-badge{animation:popIn .4s var(--badge-delay) cubic-bezier(.34,1.56,.64,1) both;}
         .skill-badge:hover{background:var(--accent-dim);border-color:rgba(200,255,62,.3);color:var(--accent);transform:translateY(-2px);}
+        [data-theme="light"] .skill-badge:hover{border-color:rgba(37,99,235,.3);}
 
         /* TESTIMONIALS */
         .testimonials-section{background:var(--bg-2);}
         .testimonials-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:1.5rem;opacity:0;transform:translateY(32px);transition:opacity .7s .15s ease,transform .7s .15s ease;}
         .testimonials-grid.revealed{opacity:1;transform:none;}
-        .testimonial-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;position:relative;opacity:0;}
+        .testimonial-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.75rem;opacity:0;}
         .testimonials-grid.revealed .testimonial-card{animation:fadeUp .6s var(--delay) ease both;}
         .testimonial-quote{font-family:var(--font-display);font-size:4rem;color:var(--accent);line-height:1;margin-bottom:.5rem;opacity:.4;}
         .testimonial-text{font-size:.9375rem;color:var(--text-muted);line-height:1.7;margin-bottom:1.5rem;font-style:italic;}
@@ -635,9 +692,11 @@ export default function Page() {
         label{font-size:.8rem;color:var(--text-muted);font-family:var(--font-mono);}
         input,textarea{background:var(--bg-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.75rem 1rem;font-family:var(--font-body);font-size:.9rem;outline:none;resize:vertical;transition:border-color .2s;}
         input:focus,textarea:focus{border-color:rgba(200,255,62,.4);}
+        [data-theme="light"] input:focus,[data-theme="light"] textarea:focus{border-color:rgba(37,99,235,.4);}
         input::placeholder,textarea::placeholder{color:var(--text-muted);}
         .btn-submit{align-self:flex-start;}
         .form-success{display:flex;align-items:center;gap:1rem;padding:2rem;background:var(--accent-dim);border:1px solid rgba(200,255,62,.25);border-radius:var(--radius);color:var(--accent);}
+        [data-theme="light"] .form-success{border-color:rgba(37,99,235,.25);}
         .success-icon{font-size:1.5rem;}
 
         /* FOOTER */
